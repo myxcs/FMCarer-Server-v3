@@ -30,15 +30,13 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Family", // Reference to the Family model
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
   balance: {
     type: Number,
     default: 0, // Default balance is 0
   }
-});
+}, {
+  timestamps: true,
+});  
 
 //hash password before saving
 userSchema.pre('save', async function (next) {

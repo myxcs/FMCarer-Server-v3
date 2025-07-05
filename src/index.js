@@ -2,6 +2,7 @@ import express from 'express';
 import "dotenv/config";
 
 import authRouter from './routers/authRoutes.js';
+import postRouter from './routers/postRoutes.js';
 import { connectDB } from './lib/db.js';
 
 const app = express(); // Đã sửa tên đúng
@@ -15,6 +16,7 @@ app.get('/', (req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/posts", postRouter); 
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
