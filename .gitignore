@@ -41,6 +41,7 @@ build/
 # Optional: uploads or user files
 uploads/
 public/uploads/
+src/testing/
 
 # Others
 .env.local

@@ -17,7 +17,8 @@ const postSchema = new mongoose.Schema({
         trim: true
     },
     images: [{
-        type: String // URL ảnh (nếu có)
+        url: String,
+        public_id: String
     }],
     approved: {
         type: Boolean,

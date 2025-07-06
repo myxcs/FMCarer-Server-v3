@@ -1,8 +1,7 @@
-// Import thư viện Express để tạo server
+// Import thư viện 
 import express from 'express';
-
-// Import dotenv để sử dụng biến môi trường từ file .env
 import "dotenv/config";
+import cors from 'cors';
 
 // Import các router của ứng dụng
 import authRouter from './routers/authRoutes.js';     // Xử lý đăng ký, đăng nhập
@@ -14,6 +13,12 @@ import { connectDB } from './lib/db.js';
 
 // Khởi tạo ứng dụng Express
 const app = express();
+
+// Thiết lập CORS để cho phép các nguồn khác truy cập vào API
+app.use(cors({
+  origin: '*', // Cho phép tất cả nguồn, có thể thay đổi theo nhu cầu bảo mật
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Các phương thức HTTP được phép
+}));
 
 // Cổng mà server sẽ lắng nghe (đọc từ biến môi trường hoặc mặc định là 3000)
 const PORT = process.env.PORT || 3000;
