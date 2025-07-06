@@ -1,32 +1,58 @@
 import Post from "../models/Post.js";
+import cloudinary from "../lib/cloudinary.js";
 import mongoose from "mongoose";
 
-// 📝 Tạo bài viết mới
+//  Tạo bài viết mới (hỗ trợ upload ảnh)
 export const createPost = async (req, res) => {
   try {
-    const { content, audience, images } = req.body;
+    const { content, audience } = req.body;
     const userId = req.user._id;
 
     if (!content) {
       return res.status(400).json({ message: "Content is required" });
     }
 
+    let uploadedImages = [];
+
+    //  Nếu có ảnh thì upload lên Cloudinary
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const result = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: "fmcarer/posts" },
+            (error, result) => {
+              if (error) {
+                console.error(" Cloudinary upload error:", error);
+                reject(error);
+              } else {
+                resolve(result);
+              }
+            }
+          );
+          stream.end(file.buffer);
+        });
+
+        uploadedImages.push(result.secure_url);
+      }
+    }
+
     const post = new Post({
       author: userId,
       content,
       audience: audience || "public",
-      images: images || [],
-      approved: audience === "family" ? true : false // Family posts không cần duyệt
+      images: uploadedImages,
+      approved: audience === "family" ? true : false,
     });
 
     await post.save();
-    res.status(201).json({ message: "Post created", post });
+    res.status(201).json({ message: " Post created", post });
   } catch (err) {
+    console.error("❌ Error creating post:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// 📄 Lấy danh sách bài viết phù hợp
+//  Lấy danh sách bài viết phù hợp với vai trò
 export const getPosts = async (req, res) => {
   try {
     const user = req.user;
@@ -34,11 +60,11 @@ export const getPosts = async (req, res) => {
 
     if (user.role === "admin") {
       filter = {}; // Admin thấy tất cả
-    } else {
+    } else if (user.role === "main" || user.role === "sub") {
       filter = {
         $or: [
-          { audience: "family", author: user._id },
-          { audience: "public", approved: true },
+          { audience: "family", author: user._id }, // Thấy bài trong gia đình của mình
+          { audience: "public", approved: true },   // Thấy bài công khai đã được duyệt
         ],
       };
     }
@@ -49,11 +75,12 @@ export const getPosts = async (req, res) => {
 
     res.json(posts);
   } catch (err) {
+    console.error("❌ Error getting posts:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// 📄 Lấy bài viết theo user
+//  Lấy bài viết của 1 người dùng
 export const getPostsByUser = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -62,19 +89,20 @@ export const getPostsByUser = async (req, res) => {
       author: userId,
       $or: [
         { audience: "family" },
-        { audience: "public", approved: true }
-      ]
+        { audience: "public", approved: true },
+      ],
     })
       .populate("author", "username profileImage")
       .sort({ createdAt: -1 });
 
     res.json(posts);
   } catch (err) {
+    console.error("❌ Error getting user posts:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// ❤️ Like / Unlike bài viết
+//  Like hoặc Unlike
 export const likePost = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -83,21 +111,24 @@ export const likePost = async (req, res) => {
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    const index = post.likes.indexOf(userId);
+    //  So sánh ObjectId bằng toString
+    const index = post.likes.findIndex(id => id.toString() === userId.toString());
+
     if (index === -1) {
-      post.likes.push(userId); // Like
+      post.likes.push(userId);
     } else {
-      post.likes.splice(index, 1); // Unlike
+      post.likes.splice(index, 1);
     }
 
     await post.save();
     res.json({ message: "Post updated", likes: post.likes.length });
   } catch (err) {
+    console.error("❌ Error liking post:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// 💬 Thêm bình luận
+//  Thêm bình luận
 export const commentOnPost = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -118,11 +149,12 @@ export const commentOnPost = async (req, res) => {
     await post.save();
     res.json({ message: "Comment added", comments: post.comments });
   } catch (err) {
+    console.error("❌ Error commenting:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
-// ✅ Duyệt bài viết (chỉ admin)
+//  Duyệt bài viết (admin only)
 export const approvePost = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -137,8 +169,10 @@ export const approvePost = async (req, res) => {
     post.approved = true;
     await post.save();
 
+    console.log(`Admin ${req.user._id} approved post ${postId}`);
     res.json({ message: "Post approved" });
   } catch (err) {
+    console.error("❌ Error approving post:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
