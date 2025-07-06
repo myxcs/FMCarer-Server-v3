@@ -33,10 +33,14 @@ const userSchema = new mongoose.Schema({
   balance: {
     type: Number,
     default: 0, // Default balance is 0
+  },
+  isActive: {
+    type: Boolean,
+    default: true, // Default status is active
   }
 }, {
   timestamps: true,
-});  
+});
 
 //hash password before saving
 userSchema.pre('save', async function (next) {

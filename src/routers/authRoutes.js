@@ -54,7 +54,8 @@ router.post('/register', async (req, res) => {
             profileImage, // Default profile image URL
             role: 'main', // Default role is 'user'
             familyId: null, // Assuming familyId is optional
-            balance: 0 // Default balance is 0
+            balance: 0, // Default balance is 0
+            isActive: true // Default status is active
         });
         await user.save();
         const token = generateToken(user._id); // Assuming you have a method to generate auth token
@@ -69,6 +70,7 @@ router.post('/register', async (req, res) => {
                     role: user.role,
                     familyId: user.familyId,
                     balance: user.balance,
+                    isActive: user.isActive // Include isActive status
                 },
                 token // Return the generated token
             }
@@ -108,6 +110,7 @@ router.post('/login', async (req, res) => {
                     role: user.role,
                     familyId: user.familyId,
                     balance: user.balance,
+                    isActive: user.isActive // Include isActive status
                 }, 
                 token // Return the generated token
             }
