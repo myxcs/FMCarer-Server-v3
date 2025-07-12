@@ -40,7 +40,7 @@ export const createPost = async (req, res) => {
       author: userId,
       content,
       audience: audience || "public",
-      images: uploadedImages, // ✅ dán phần này tại đây
+      images: uploadedImages, //  dán phần này tại đây
       approved: audience === "family" ? true : false,
     });
 
@@ -267,7 +267,7 @@ export const deletePost = async (req, res) => {
 
     res.json({ message: "Post and images deleted successfully" });
   } catch (err) {
-    console.error("❌ Error deleting post:", err);
+    console.error(" Error deleting post:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };

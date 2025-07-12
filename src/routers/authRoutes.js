@@ -2,8 +2,6 @@ import express from 'express';
 import User from '../models/User.js'; // Assuming you have a User model defined in models/User.js
 import jwt from 'jsonwebtoken'; // For generating JWT tokens
 
-
-
 const router = express.Router();
 
 
