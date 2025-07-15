@@ -6,22 +6,22 @@ import {
   likePost,
   commentOnPost,
   approvePost,
+  getPostById,
 } from "../controllers/postController.js";
-
 import { isAuth } from "../middlewares/auth.js";
 import { isAdmin } from "../middlewares/role.js";
 import upload from "../lib/multer.js";
+import { applyPostVisibility } from "../middlewares/postVisibility.js";
 
 const router = express.Router();
 
 // Tạo bài viết
-// Mới (hỗ trợ upload tối đa 5 ảnh)
 router.post("/", isAuth, upload.array("images", 5), createPost);
 
-
 // Lấy bài viết
-router.get("/", isAuth, getPosts);
-router.get("/user/:userId", isAuth, getPostsByUser);
+router.get("/", isAuth, applyPostVisibility, getPosts);
+router.get("/user/:userId", isAuth, applyPostVisibility, getPostsByUser);
+router.get("/:id", isAuth, getPostById); // Route mới
 
 // Like
 router.patch("/:postId/like", isAuth, likePost);

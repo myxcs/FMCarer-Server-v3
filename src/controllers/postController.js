@@ -56,36 +56,18 @@ export const createPost = async (req, res) => {
 //  Lấy danh sách bài viết phù hợp với vai trò
 export const getPosts = async (req, res) => {
   try {
-    const user = req.user;
-
-    // Lấy page và limit từ query string, mặc định nếu không có
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const filter = req.postFilter;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
     const skip = (page - 1) * limit;
 
-    let filter = {};
-
-    if (user.role === "admin") {
-      filter = {}; // Admin thấy tất cả
-    } else if (["main", "sub"].includes(user.role)) {
-      filter = {
-        $or: [
-          { audience: "family", author: user._id },
-          { audience: "public", approved: true },
-        ],
-      };
-    } else {
-      return res.status(403).json({ message: "Permission denied" });
-    }
-
-    const total = await Post.countDocuments(filter); // Tổng số bài viết
+    const total = await Post.countDocuments(filter);
     const posts = await Post.find(filter)
       .populate("author", "username profileImage role")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
-
-    const hasMore = skip + posts.length < total;
+      .limit(limit)
+      .lean();
 
     res.json({
       posts,
@@ -93,62 +75,31 @@ export const getPosts = async (req, res) => {
         page,
         limit,
         total,
-        hasMore,
+        hasMore: skip + posts.length < total,
       },
     });
   } catch (err) {
-    console.error(" Error getting posts:", err);
+    console.error("Error getting posts:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
 
-//  Lấy bài viết của 1 người dùng
+//  Lấy bài viết theo ID
 export const getPostsByUser = async (req, res) => {
-  
   try {
-    const { userId } = req.params;
-    const currentUser = req.user;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = parseInt(req.query.skip) || 0;
+    const filter = req.postFilter;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const skip = (page - 1) * limit;
 
-    const filter = { author: userId };
-
-    // Lấy thông tin người đăng bài để kiểm tra familyId
-    const authorUser = await User.findById(userId);
-    if (!authorUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const isSameUser = currentUser._id.toString() === userId;
-    const isAdmin = currentUser.role === "admin";
-    const isSameFamily =
-      currentUser.familyId &&
-      authorUser.familyId &&
-      currentUser.familyId.toString() === authorUser.familyId.toString();
-
-    // Xác định bài viết nào được phép hiển thị
-    if (isAdmin || isSameUser) {
-      // thấy tất cả bài
-      // Không cần thêm $or
-    } else if (isSameFamily) {
-      // Thấy bài trong gia đình và bài công khai đã được duyệt
-      filter.$or = [
-        { audience: "family" },
-        { audience: "public", approved: true },
-      ];
-    } else {
-      // Người ngoài: chỉ thấy bài công khai đã duyệt
-      filter.$or = [{ audience: "public", approved: true }];
-    }
-
+    const total = await Post.countDocuments(filter);
     const posts = await Post.find(filter)
       .populate("author", "username profileImage role")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
-
-    const total = await Post.countDocuments(filter);
+      .limit(limit)
+      .lean();
 
     res.json({
       posts,
@@ -156,12 +107,62 @@ export const getPostsByUser = async (req, res) => {
       hasMore: skip + posts.length < total,
     });
   } catch (err) {
-    console.error(" Error getting user posts:", err);
+    console.error("Error getting user posts:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
+// Lấy bài viết theo ID
+export const getPostById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid postId" });
+    }
 
+    const post = await Post.findById(id)
+      .populate("author", "username profileImage role familyId")
+      .populate("comments.user", "username profileImage")
+      .lean();
+
+    if (!post || !post.isActive) {
+      return res.status(404).json({ message: "Post not found or inactive" });
+    }
+
+    const user = req.user;
+
+    if (user.role === "admin") {
+      return res.json(post);
+    }
+
+    if (["main", "sub"].includes(user.role)) {
+      const isAuthor = post.author._id.toString() === user._id.toString();
+      const isSameFamily =
+        user.familyId &&
+        post.author.familyId &&
+        user.familyId.toString() === post.author.familyId.toString();
+
+      if (isAuthor) {
+        return res.json(post);
+      }
+
+      if (post.audience === "family" && isSameFamily) {
+        return res.json(post);
+      }
+
+      if (post.audience === "public" && post.approved) {
+        return res.json(post);
+      }
+
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    return res.status(403).json({ message: "Permission denied" });
+  } catch (err) {
+    console.error("Error getting post:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
 //  Like hoặc Unlike
 export const likePost = async (req, res) => {
   try {
@@ -171,8 +172,7 @@ export const likePost = async (req, res) => {
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    //  So sánh ObjectId bằng toString
-    const index = post.likes.findIndex(id => id.toString() === userId.toString());
+    const index = post.likes.findIndex((id) => id.toString() === userId.toString());
 
     if (index === -1) {
       post.likes.push(userId);
@@ -181,9 +181,12 @@ export const likePost = async (req, res) => {
     }
 
     await post.save();
-    res.json({ message: "Post updated", likes: post.likes.length });
+    const updatedPost = await Post.findById(postId)
+      .populate("author", "username profileImage role familyId")
+      .lean();
+    res.json(updatedPost);
   } catch (err) {
-    console.error(" Error liking post:", err);
+    console.error("Error liking post:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
